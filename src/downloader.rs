@@ -11,11 +11,6 @@ pub fn download(url: &str) -> Result<Vec<Aircraft>, Box<dyn Error>> {
     println!("Downloaded {} bytes, parsing data...", csv_data.len());
     let aircraft_vec: Vec<Aircraft> = parse_file(&csv_data)?;
 
-    // Print the first 10 lines
-    for aircraft in aircraft_vec.iter().take(5) {
-        println!("{}", aircraft);
-    }
-
     Ok(aircraft_vec)
 }
 
