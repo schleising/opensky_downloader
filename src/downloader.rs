@@ -3,12 +3,12 @@ use std::error::Error;
 use crate::models::Aircraft;
 
 pub fn download(url: &str) -> Result<Vec<Aircraft>, Box<dyn Error>> {
-    println!("Downloading file from {}", url);
-
     // Download the file
+    println!("Downloading file from {}...", url);
     let csv_data: String = download_file(url)?;
 
     // Parse the file
+    println!("Downloaded {} bytes, parsing data...", csv_data.len());
     let aircraft_vec: Vec<Aircraft> = parse_file(&csv_data)?;
 
     // Print the first 10 lines
@@ -25,6 +25,11 @@ fn download_file(url: &str) -> Result<String, Box<dyn Error>> {
 
     // Send a GET request to the URL
     let mut response: reqwest::blocking::Response = client.get(url).send()?;
+
+    // Check if the request was successful
+    if !response.status().is_success() {
+        return Err(format!("Failed to download file: {}", response.status()).into());
+    }
 
     // Create a buffer to store the response body
     let mut buffer: Vec<u8> = Vec::new();
