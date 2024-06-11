@@ -9,7 +9,12 @@ pub fn download(url: &str) -> Result<Vec<Aircraft>, Box<dyn Error>> {
 
     // Parse the file
     println!("Downloaded {} bytes, parsing data...", csv_data.len());
+    // Start a timer
+    let start = std::time::Instant::now();
     let aircraft_vec: Vec<Aircraft> = parse_file(&csv_data)?;
+    // Stop the timer
+    let duration = start.elapsed();
+    println!("Parsed {} records in {:?}", aircraft_vec.len(), duration);
 
     Ok(aircraft_vec)
 }
@@ -19,21 +24,15 @@ fn download_file(url: &str) -> Result<String, Box<dyn Error>> {
     let client: reqwest::blocking::Client = reqwest::blocking::ClientBuilder::new().build()?;
 
     // Send a GET request to the URL
-    let mut response: reqwest::blocking::Response = client.get(url).send()?;
+    let response: reqwest::blocking::Response = client.get(url).send()?;
 
     // Check if the request was successful
     if !response.status().is_success() {
         return Err(format!("Failed to download file: {}", response.status()).into());
     }
 
-    // Create a buffer to store the response body
-    let mut buffer: Vec<u8> = Vec::new();
-
-    // Copy the response body into the buffer
-    response.copy_to(&mut buffer)?;
-
-    // Convert the buffer into a string
-    let body: String = String::from_utf8(buffer)?;
+    // Read the body of the response
+    let body: String = response.text()?;
 
     // Return the body
     Ok(body)
