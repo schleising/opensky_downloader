@@ -16,18 +16,19 @@ enum ExitCodes {
     WriteError = 2,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // Start a timer
     let start: Instant = Instant::now();
 
     // URL to download the file from
-    let url: &str = "https://opensky-network.org/datasets/metadata/aircraftDatabase.csv";
+    let url: &str = "https://www.schleising.net/aircraftDatabase.csv";
 
     // Initialise the aircraft vector
     let aircraft_vec: Vec<Aircraft>;
 
     // Download the file
-    match download(url) {
+    match download(url).await {
         Ok(result) => {
             // Print a success message
             println!("{}", "Downloaded successfully".green().bold());
@@ -50,7 +51,7 @@ fn main() {
         },
     }
 
-    match write_to_db(aircraft_vec) {
+    match write_to_db(aircraft_vec).await {
         // Print a success message
         Ok(_) => println!("{}", "Wrote to database successfully".green().bold()),
         Err(e) => {

@@ -3,10 +3,10 @@ use std::time::{Instant, Duration};
 
 use crate::models::Aircraft;
 
-pub fn download(url: &str) -> Result<Vec<Aircraft>, Box<dyn Error>> {
+pub async fn download(url: &str) -> Result<Vec<Aircraft>, Box<dyn Error>> {
     // Download the file
     println!("Downloading file from {}...", url);
-    let csv_data: String = download_file(url)?;
+    let csv_data: String = download_file(url).await?;
 
     // Parse the file
     println!("Downloaded {} bytes, parsing data...", csv_data.len());
@@ -20,12 +20,12 @@ pub fn download(url: &str) -> Result<Vec<Aircraft>, Box<dyn Error>> {
     Ok(aircraft_vec)
 }
 
-fn download_file(url: &str) -> Result<String, Box<dyn Error>> {
+async fn download_file(url: &str) -> Result<String, Box<dyn Error>> {
     // Create a reqwest client
-    let client: reqwest::blocking::Client = reqwest::blocking::ClientBuilder::new().build()?;
+    let client: reqwest::Client = reqwest::ClientBuilder::new().build()?;
 
     // Send a GET request to the URL
-    let response: reqwest::blocking::Response = client.get(url).send()?;
+    let response: reqwest::Response = client.get(url).send().await?;
 
     // Check if the request was successful
     if !response.status().is_success() {
@@ -35,7 +35,7 @@ fn download_file(url: &str) -> Result<String, Box<dyn Error>> {
     // Start a timer
     let start: Instant = Instant::now();
     // Read the body of the response
-    let body: String = response.text()?;
+    let body: String = response.text().await?;
     // Stop the timer
     let duration: Duration = start.elapsed();
     println!("Got body in {:?}", duration);
