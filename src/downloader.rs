@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::time::{Instant, Duration};
 
 use crate::models::Aircraft;
 
@@ -10,10 +11,10 @@ pub fn download(url: &str) -> Result<Vec<Aircraft>, Box<dyn Error>> {
     // Parse the file
     println!("Downloaded {} bytes, parsing data...", csv_data.len());
     // Start a timer
-    let start = std::time::Instant::now();
+    let start: Instant = Instant::now();
     let aircraft_vec: Vec<Aircraft> = parse_file(&csv_data)?;
     // Stop the timer
-    let duration = start.elapsed();
+    let duration: Duration = start.elapsed();
     println!("Parsed {} records in {:?}", aircraft_vec.len(), duration);
 
     Ok(aircraft_vec)
@@ -31,8 +32,13 @@ fn download_file(url: &str) -> Result<String, Box<dyn Error>> {
         return Err(format!("Failed to download file: {}", response.status()).into());
     }
 
+    // Start a timer
+    let start: Instant = Instant::now();
     // Read the body of the response
     let body: String = response.text()?;
+    // Stop the timer
+    let duration: Duration = start.elapsed();
+    println!("Got body in {:?}", duration);
 
     // Return the body
     Ok(body)

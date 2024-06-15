@@ -3,6 +3,9 @@ mod models;
 mod write_db;
 
 use std::process::exit;
+use std::time::{Instant, Duration};
+
+use colored::Colorize;
 
 use downloader::download;
 use models::Aircraft;
@@ -14,6 +17,9 @@ enum ExitCodes {
 }
 
 fn main() {
+    // Start a timer
+    let start: Instant = Instant::now();
+
     // URL to download the file from
     let url: &str = "https://opensky-network.org/datasets/metadata/aircraftDatabase.csv";
 
@@ -24,25 +30,46 @@ fn main() {
     match download(url) {
         Ok(result) => {
             // Print a success message
-            println!("Downloaded successfully");
+            println!("{}", "Downloaded successfully".green().bold());
 
             // Assign the result to the aircraft vector
             aircraft_vec = result;
         },
         Err(e) => {
             // Print an error message and exit
-            eprintln!("Error: {}", e);
+            let error: String = format!("Error: {}", e);
+            eprintln!("{}", error.red().bold());
+            
+            // Stop the timer
+            let duration: Duration = start.elapsed();
+            let text: String = format!("Program ran in {:?}", duration);
+            println!("{}", text.blue().bold());
+
+            // Exit with the DownloadError exit code
             exit(ExitCodes::DownloadError as i32);
         },
     }
 
     match write_to_db(aircraft_vec) {
         // Print a success message
-        Ok(_) => println!("Wrote to database successfully"),
+        Ok(_) => println!("{}", "Wrote to database successfully".green().bold()),
         Err(e) => {
             // Print an error message and exit
-            eprintln!("Error: {}", e);
+            let error: String = format!("Error: {}", e);
+            eprintln!("{}", error.red().bold());
+
+            // Stop the timer
+            let duration: Duration = start.elapsed();
+            let text: String = format!("Program ran in {:?}", duration);
+            println!("{}", text.blue().bold());
+
+            // Exit with the WriteError exit code
             exit(ExitCodes::WriteError as i32);
         },
     }
+
+    // Stop the timer
+    let duration: Duration = start.elapsed();
+    let text: String = format!("Program ran in {:?}", duration);
+    println!("{}", text.blue().bold());
 }
