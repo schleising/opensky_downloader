@@ -88,37 +88,49 @@ pub async fn download(url: &str) -> Result<(), Box<dyn Error>> {
     // Create a vector to store the join handles
     let mut join_handles: Vec<JoinHandle<()>> = Vec::new();
 
-    // Create a vector to store 1000 records at a time
-    let mut records_vec: Vec<Aircraft> = Vec::new();
-
+    
     println!("{}", "Downloading records...".blue().bold());
-
+    
     // Start a timer
     let start: Instant = Instant::now();
+    
+    let mut finished = false;
+    
+    while !finished {
+        // Create a vector to store 1000 records at a time
+        let mut records_vec: Vec<Aircraft> = Vec::new();
 
-    while let Some(record) = records.next().await {
-        // Unwrap the record
-        let mut record: Aircraft = record?;
+        while records_vec.len () < MAX_RECORDS {
+            match records.next().await {
+                Some(record) => {
+                    // Unwrap the record
+                    let mut record: Aircraft = record?;
 
-        // Check if the icao24 field is empty, skip the record if it is
-        if record.icao24.is_empty() {
-            continue;
+                    // Check if the icao24 field is empty, skip the record if it is
+                    if record.icao24.is_empty() {
+                        continue;
+                    }
+
+                    // Make sure the icao24 field is uppercase
+                    record.icao24 = record.icao24.to_uppercase();
+
+                    // Push the record into the vector
+                    records_vec.push(record);
+                }
+                None => {
+                    finished = true;
+                    break;
+                }
+            }
         }
 
-        // Make sure the icao24 field is uppercase
-        record.icao24 = record.icao24.to_uppercase();
-
-        // Push the record into the vector
-        records_vec.push(record);
-
-        // If the vector has 1000 records, insert them into the collection
-        if records_vec.len() == MAX_RECORDS {
-            let collection = arc_collection.clone();
-            let records_to_insert = records_vec.clone();
+        if records_vec.len() > 0 {
+            // Clone the Arc to share the collection between tasks
+            let collection: Arc<Collection<Aircraft>> = arc_collection.clone();
 
             join_handles.push(tokio::spawn(async move {
                 // Insert the aircraft into the collection
-                match collection.insert_many(records_to_insert, None).await {
+                match collection.insert_many(records_vec, None).await {
                     Ok(_) => {}
                     Err(e) => {
                         let error: String = format!("Failed to insert aircraft: {}", e);
@@ -126,9 +138,6 @@ pub async fn download(url: &str) -> Result<(), Box<dyn Error>> {
                     }
                 }
             }));
-
-            // Clear the vector
-            records_vec.clear();
         }
     }
 
@@ -137,26 +146,10 @@ pub async fn download(url: &str) -> Result<(), Box<dyn Error>> {
     let text: String = format!("Downloaded records in {:?}", duration);
     println!("{}", text.green().bold());
 
-    println!("{}", "Inserting records...".blue().bold());
-
+    println!("{}", "Waiting for tasks to finish...".blue().bold());
 
     // Start a timer
     let start: Instant = Instant::now();
-
-    // Insert the remaining records into the collection
-    if !records_vec.is_empty() {
-        // Clone the collection
-        let collection: Arc<Collection<Aircraft>> = arc_collection.clone();
-
-        // Insert the aircraft into the collection
-        match collection.insert_many(records_vec, None).await {
-            Ok(_) => {}
-            Err(e) => {
-                let error: String = format!("Failed to insert aircraft: {}", e);
-                eprintln!("{}", error.red().bold());
-            }
-        }
-    }
 
     // Wait for all the join handles to finish
     for join_handle in join_handles {
@@ -165,7 +158,7 @@ pub async fn download(url: &str) -> Result<(), Box<dyn Error>> {
 
     // Stop the timer
     let duration: Duration = start.elapsed();
-    let text: String = format!("Inserted records in {:?}", duration);
+    let text: String = format!("Tasks finished in {:?}", duration);
     println!("{}", text.green().bold());
 
     Ok(())
