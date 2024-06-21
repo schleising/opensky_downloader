@@ -90,10 +90,7 @@ pub async fn download(url: &str) -> Result<(), DownloadError> {
     let collection: Collection<Aircraft> = db.collection(COLLECTION_NAME);
 
     // Send a GET request to the URL
-    let response: reqwest::Response = http_client.get(url).send().await?;
-
-    // Check if the request was successful
-    response.error_for_status_ref()?;
+    let response: reqwest::Response = http_client.get(url).send().await?.error_for_status()?;
 
     // Drop the collection if it already exists
     println!(
@@ -131,19 +128,18 @@ pub async fn download(url: &str) -> Result<(), DownloadError> {
     // Create a vector to store the join handles
     let mut join_handles: Vec<JoinHandle<()>> = Vec::new();
 
-    
     println!("{}", "Downloading records...".blue().bold());
-    
+
     // Start a timer
     let start: Instant = Instant::now();
-    
+
     let mut finished = false;
-    
+
     while !finished {
         // Create a vector to store 1000 records at a time
         let mut records_vec: Vec<Aircraft> = Vec::new();
 
-        while records_vec.len () < MAX_RECORDS {
+        while records_vec.len() < MAX_RECORDS {
             match records.next().await {
                 Some(record) => {
                     // Unwrap the record
