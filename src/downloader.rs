@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -21,6 +20,52 @@ const DATABASE_NAME: &str = "web_database";
 const COLLECTION_NAME: &str = "aircraft_collection";
 const MAX_RECORDS: usize = 1000;
 
+// Errors that can occur
+#[derive(Debug)]
+pub enum DownloadError {
+    ReqwestError(reqwest::Error),
+    MongoError(mongodb::error::Error),
+    CsvError(csv_async::Error),
+    JoinError(tokio::task::JoinError),
+}
+
+impl From<reqwest::Error> for DownloadError {
+    fn from(error: reqwest::Error) -> Self {
+        DownloadError::ReqwestError(error)
+    }
+}
+
+impl From<mongodb::error::Error> for DownloadError {
+    fn from(error: mongodb::error::Error) -> Self {
+        DownloadError::MongoError(error)
+    }
+}
+
+impl From<csv_async::Error> for DownloadError {
+    fn from(error: csv_async::Error) -> Self {
+        DownloadError::CsvError(error)
+    }
+}
+
+impl From<tokio::task::JoinError> for DownloadError {
+    fn from(error: tokio::task::JoinError) -> Self {
+        DownloadError::JoinError(error)
+    }
+}
+
+impl std::fmt::Display for DownloadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            DownloadError::ReqwestError(e) => write!(f, "Reqwest error: {}", e),
+            DownloadError::MongoError(e) => write!(f, "Mongo error: {}", e),
+            DownloadError::CsvError(e) => write!(f, "CSV error: {}", e),
+            DownloadError::JoinError(e) => write!(f, "Join error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for DownloadError {}
+
 fn response_to_async_read(resp: reqwest::Response) -> impl tokio::io::AsyncRead {
     use futures::stream::TryStreamExt;
 
@@ -28,7 +73,7 @@ fn response_to_async_read(resp: reqwest::Response) -> impl tokio::io::AsyncRead 
     tokio_util::io::StreamReader::new(stream)
 }
 
-pub async fn download(url: &str) -> Result<(), Box<dyn Error>> {
+pub async fn download(url: &str) -> Result<(), DownloadError> {
     let text = format!("Downloading file from {}...", url);
     println!("{}", text.blue().bold());
 
@@ -48,9 +93,7 @@ pub async fn download(url: &str) -> Result<(), Box<dyn Error>> {
     let response: reqwest::Response = http_client.get(url).send().await?;
 
     // Check if the request was successful
-    if !response.status().is_success() {
-        return Err(format!("Failed to download file: {}", response.status()).into());
-    }
+    response.error_for_status_ref()?;
 
     // Drop the collection if it already exists
     println!(
