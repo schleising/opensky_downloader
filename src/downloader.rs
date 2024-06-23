@@ -21,12 +21,9 @@ const DATABASE_NAME: &str = "web_database";
 const COLLECTION_NAME: &str = "aircraft_collection";
 const MAX_RECORDS: usize = 1000;
 
-pub trait RecordValidity {
-    fn is_valid(&self) -> bool;
-}
-
-pub trait FixRecord {
-    fn fix_record(&mut self);
+pub trait FilterMap {
+    fn filter(&self) -> bool;
+    fn map(&mut self);
 }
 
 // Errors that can occur
@@ -82,7 +79,7 @@ async fn receive_records<'r, R, D>(
 ) -> Result<bool, DownloadError>
 where
     R: tokio::io::AsyncRead + Unpin + Send,
-    D: DeserializeOwned + Serialize + Send + Sync + RecordValidity + FixRecord + 'static,
+    D: DeserializeOwned + Serialize + Send + Sync + FilterMap + 'static,
 {
     // True if the records are finished
     let mut finished = false;
@@ -96,13 +93,13 @@ where
                 // Unwrap the record
                 let mut record: D = record?;
 
-                // Check if the icao24 field is empty, skip the record if it is
-                if !record.is_valid() {
+                // Filter out unwanted records
+                if !record.filter() {
                     continue;
                 }
 
-                // Fix the record
-                record.fix_record();
+                // Perform a mapping operation on the record
+                record.map();
 
                 // Push the record into the vector
                 records_vec.push(record);
@@ -142,7 +139,7 @@ fn response_to_async_read(resp: reqwest::Response) -> impl tokio::io::AsyncRead 
 
 pub async fn download<T>(url: &str) -> Result<(), DownloadError>
 where
-    T: DeserializeOwned + Serialize + RecordValidity + FixRecord + Send + Sync + 'static,
+    T: DeserializeOwned + Serialize + FilterMap + Send + Sync + 'static,
 {
     let text = format!("Downloading file from {}...", url);
     println!("{}", text.blue().bold());
