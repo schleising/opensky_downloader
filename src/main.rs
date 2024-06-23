@@ -6,7 +6,10 @@ use std::time::{Duration, Instant};
 
 use colored::Colorize;
 
+use models::Aircraft;
+
 use downloader::download;
+
 enum ExitCodes {
     DownloadError = 1,
 }
@@ -20,7 +23,7 @@ async fn main() {
     let url: &str = "https://opensky-network.org/datasets/metadata/aircraftDatabase.csv";
 
     // Download the file
-    match download(url).await {
+    match download::<Aircraft>(url).await {
         Ok(_) => {}
         Err(e) => {
             // Print an error message and exit

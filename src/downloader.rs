@@ -5,6 +5,9 @@ use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_util;
 
+use serde::de::DeserializeOwned;
+use serde::ser::Serialize;
+
 use mongodb::IndexModel;
 use mongodb::{Client, Collection, Database};
 
@@ -12,13 +15,19 @@ use bson::doc;
 
 use colored::Colorize;
 
-use crate::models::Aircraft;
-
 // Constants
 const MONGO_URI: &str = "mongodb://macmini2:27017";
 const DATABASE_NAME: &str = "web_database";
 const COLLECTION_NAME: &str = "aircraft_collection";
 const MAX_RECORDS: usize = 1000;
+
+pub trait RecordValidity {
+    fn is_valid(&self) -> bool;
+}
+
+pub trait FixRecord {
+    fn fix_record(&mut self);
+}
 
 // Errors that can occur
 #[derive(Debug)]
@@ -66,6 +75,64 @@ impl std::fmt::Display for DownloadError {
 
 impl std::error::Error for DownloadError {}
 
+async fn receive_records<'r, R, D>(
+    records: &mut csv_async::DeserializeRecordsStream<'r, R, D>,
+    arc_collection: Arc<Collection<D>>,
+    join_handles: &mut Vec<JoinHandle<()>>,
+) -> Result<bool, DownloadError>
+where
+    R: tokio::io::AsyncRead + Unpin + Send,
+    D: DeserializeOwned + Serialize + Send + Sync + RecordValidity + FixRecord + 'static,
+{
+    // True if the records are finished
+    let mut finished = false;
+
+    // Create a vector to store 1000 records at a time
+    let mut records_vec: Vec<D> = Vec::new();
+
+    while records_vec.len() < MAX_RECORDS {
+        match records.next().await {
+            Some(record) => {
+                // Unwrap the record
+                let mut record: D = record?;
+
+                // Check if the icao24 field is empty, skip the record if it is
+                if !record.is_valid() {
+                    continue;
+                }
+
+                // Fix the record
+                record.fix_record();
+
+                // Push the record into the vector
+                records_vec.push(record);
+            }
+            None => {
+                finished = true;
+                break;
+            }
+        }
+    }
+
+    if records_vec.len() > 0 {
+        // Clone the Arc to share the collection between tasks
+        let collection: Arc<Collection<D>> = arc_collection.clone();
+
+        join_handles.push(tokio::spawn(async move {
+            // Insert the aircraft into the collection
+            match collection.insert_many(records_vec, None).await {
+                Ok(_) => {}
+                Err(e) => {
+                    let error: String = format!("Failed to insert aircraft: {}", e);
+                    eprintln!("{}", error.red().bold());
+                }
+            }
+        }));
+    }
+
+    Ok(finished)
+}
+
 fn response_to_async_read(resp: reqwest::Response) -> impl tokio::io::AsyncRead {
     use futures::stream::TryStreamExt;
 
@@ -73,7 +140,10 @@ fn response_to_async_read(resp: reqwest::Response) -> impl tokio::io::AsyncRead 
     tokio_util::io::StreamReader::new(stream)
 }
 
-pub async fn download(url: &str) -> Result<(), DownloadError> {
+pub async fn download<T>(url: &str) -> Result<(), DownloadError>
+where
+    T: DeserializeOwned + Serialize + RecordValidity + FixRecord + Send + Sync + 'static,
+{
     let text = format!("Downloading file from {}...", url);
     println!("{}", text.blue().bold());
 
@@ -87,7 +157,7 @@ pub async fn download(url: &str) -> Result<(), DownloadError> {
     let db: Database = mongo_client.database(DATABASE_NAME);
 
     // Get the collection
-    let collection: Collection<Aircraft> = db.collection(COLLECTION_NAME);
+    let collection: Collection<T> = db.collection(COLLECTION_NAME);
 
     // Send a GET request to the URL
     let response: reqwest::Response = http_client.get(url).send().await?.error_for_status()?;
@@ -120,10 +190,10 @@ pub async fn download(url: &str) -> Result<(), DownloadError> {
     let mut csv_reader = csv_async::AsyncDeserializer::from_reader(reader);
 
     // Iterate over the records
-    let mut records = csv_reader.deserialize::<Aircraft>();
+    let mut records = csv_reader.deserialize::<T>();
 
     // Create an Arc to share the collection between tasks
-    let arc_collection: Arc<Collection<Aircraft>> = Arc::new(collection);
+    let arc_collection: Arc<Collection<T>> = Arc::new(collection);
 
     // Create a vector to store the join handles
     let mut join_handles: Vec<JoinHandle<()>> = Vec::new();
@@ -136,48 +206,7 @@ pub async fn download(url: &str) -> Result<(), DownloadError> {
     let mut finished = false;
 
     while !finished {
-        // Create a vector to store 1000 records at a time
-        let mut records_vec: Vec<Aircraft> = Vec::new();
-
-        while records_vec.len() < MAX_RECORDS {
-            match records.next().await {
-                Some(record) => {
-                    // Unwrap the record
-                    let mut record: Aircraft = record?;
-
-                    // Check if the icao24 field is empty, skip the record if it is
-                    if !record.is_valid() {
-                        continue;
-                    }
-
-                    // Make sure the icao24 field is uppercase
-                    record.icao24_to_uppercase();
-
-                    // Push the record into the vector
-                    records_vec.push(record);
-                }
-                None => {
-                    finished = true;
-                    break;
-                }
-            }
-        }
-
-        if records_vec.len() > 0 {
-            // Clone the Arc to share the collection between tasks
-            let collection: Arc<Collection<Aircraft>> = arc_collection.clone();
-
-            join_handles.push(tokio::spawn(async move {
-                // Insert the aircraft into the collection
-                match collection.insert_many(records_vec, None).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        let error: String = format!("Failed to insert aircraft: {}", e);
-                        eprintln!("{}", error.red().bold());
-                    }
-                }
-            }));
-        }
+        finished = receive_records(&mut records, arc_collection.clone(), &mut join_handles).await?;
     }
 
     // Stop the timer

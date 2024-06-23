@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::downloader::{RecordValidity, FixRecord};
+
 #[derive(Deserialize, Serialize)]
 pub struct Aircraft {
     icao24: String,
@@ -32,12 +34,14 @@ pub struct Aircraft {
     category_description: String,
 }
 
-impl Aircraft {
-    pub fn is_valid(&self) -> bool {
-        self.icao24 != ""
+impl RecordValidity for Aircraft {
+    fn is_valid(&self) -> bool {
+        !self.icao24.is_empty()
     }
+}
 
-    pub fn icao24_to_uppercase(&mut self) {
+impl FixRecord for Aircraft {
+    fn fix_record(&mut self) {
         self.icao24 = self.icao24.to_uppercase();
     }
 }
