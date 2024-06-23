@@ -146,12 +146,12 @@ pub async fn download(url: &str) -> Result<(), DownloadError> {
                     let mut record: Aircraft = record?;
 
                     // Check if the icao24 field is empty, skip the record if it is
-                    if record.icao24.is_empty() {
+                    if !record.is_valid() {
                         continue;
                     }
 
                     // Make sure the icao24 field is uppercase
-                    record.icao24 = record.icao24.to_uppercase();
+                    record.icao24_to_uppercase();
 
                     // Push the record into the vector
                     records_vec.push(record);
