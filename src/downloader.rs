@@ -236,10 +236,14 @@ where
     }
 
     // Create a progress bar for the join handles
-    if let Ok(progress_bar_style) = style::ProgressStyle::default_bar().template(
-        "{spinner:.green} {msg} [{elapsed_precise}] [{bar:40.cyan/blue}] ({pos}/{len})",
-    ) {
-        progress_bar = Some(ProgressBar::new(join_handles.len() as u64).with_style(progress_bar_style).with_message("Inserting records  "));
+    if let Ok(progress_bar_style) = style::ProgressStyle::default_bar()
+        .template("{spinner:.green} {msg} [{elapsed_precise}] [{bar:40.cyan/blue}] ({pos}/{len})")
+    {
+        progress_bar = Some(
+            ProgressBar::new(join_handles.len() as u64)
+                .with_style(progress_bar_style)
+                .with_message("Inserting records  "),
+        );
     } else {
         println!("{}", "Failed to create progress bar".red().bold());
         progress_bar = None;
