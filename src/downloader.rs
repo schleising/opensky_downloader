@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
@@ -14,6 +13,8 @@ use mongodb::{Client, Collection, Database};
 use bson::doc;
 
 use colored::Colorize;
+
+use indicatif::{style, ProgressBar};
 
 // Constants
 const MONGO_URI: &str = "mongodb://macmini2:27017";
@@ -73,9 +74,10 @@ impl std::fmt::Display for DownloadError {
 impl std::error::Error for DownloadError {}
 
 async fn receive_records<'r, R, D>(
-    records: &mut csv_async::DeserializeRecordsStream<'r, R, D>,
+    records: &mut csv_async::DeserializeRecordsStreamPos<'r, R, D>,
     arc_collection: Arc<Collection<D>>,
     join_handles: &mut Vec<JoinHandle<()>>,
+    progress_bar: &Option<ProgressBar>,
 ) -> Result<bool, DownloadError>
 where
     R: tokio::io::AsyncRead + Unpin + Send,
@@ -89,7 +91,7 @@ where
 
     while records_vec.len() < MAX_RECORDS {
         match records.next().await {
-            Some(record) => {
+            Some((record, pos)) => {
                 // Unwrap the record
                 let mut record: D = record?;
 
@@ -103,6 +105,11 @@ where
 
                 // Push the record into the vector
                 records_vec.push(record);
+
+                // Print the progress
+                if let Some(progress_bar) = progress_bar {
+                    progress_bar.set_position(pos.byte());
+                }
             }
             None => {
                 finished = true;
@@ -159,6 +166,9 @@ where
     // Send a GET request to the URL
     let response: reqwest::Response = http_client.get(url).send().await?.error_for_status()?;
 
+    // Get the content length
+    let content_length: u64 = response.content_length().unwrap_or(0);
+
     // Drop the collection if it already exists
     println!(
         "{}",
@@ -187,7 +197,7 @@ where
     let mut csv_reader = csv_async::AsyncDeserializer::from_reader(reader);
 
     // Iterate over the records
-    let mut records = csv_reader.deserialize::<T>();
+    let mut records = csv_reader.deserialize_with_pos::<T>();
 
     // Create an Arc to share the collection between tasks
     let arc_collection: Arc<Collection<T>> = Arc::new(collection);
@@ -195,36 +205,58 @@ where
     // Create a vector to store the join handles
     let mut join_handles: Vec<JoinHandle<()>> = Vec::new();
 
-    println!("{}", "Downloading records...".blue().bold());
-
-    // Start a timer
-    let start: Instant = Instant::now();
-
+    // True if the records are finished
     let mut finished = false;
 
-    while !finished {
-        finished = receive_records(&mut records, arc_collection.clone(), &mut join_handles).await?;
+    // Create a progress bar
+    let mut progress_bar: Option<ProgressBar>;
+
+    if let Ok(progress_bar_style) = style::ProgressStyle::default_bar().template(
+        "{spinner:.green} {msg} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})",
+    ) {
+        progress_bar = Some(ProgressBar::new(content_length).with_style(progress_bar_style).with_message("Downloading records"));
+    } else {
+        println!("{}", "Failed to create progress bar".red().bold());
+        progress_bar = None;
     }
 
-    // Stop the timer
-    let duration: Duration = start.elapsed();
-    let text: String = format!("Downloaded records in {:?}", duration);
-    println!("{}", text.green().bold());
+    while !finished {
+        finished = receive_records(
+            &mut records,
+            arc_collection.clone(),
+            &mut join_handles,
+            &progress_bar,
+        )
+        .await?;
+    }
 
-    println!("{}", "Waiting for tasks to finish...".blue().bold());
+    // Finish the progress bar
+    if let Some(progress_bar) = progress_bar {
+        progress_bar.finish();
+    }
 
-    // Start a timer
-    let start: Instant = Instant::now();
+    // Create a progress bar for the join handles
+    if let Ok(progress_bar_style) = style::ProgressStyle::default_bar().template(
+        "{spinner:.green} {msg} [{elapsed_precise}] [{bar:40.cyan/blue}] ({pos}/{len})",
+    ) {
+        progress_bar = Some(ProgressBar::new(join_handles.len() as u64).with_style(progress_bar_style).with_message("Inserting records  "));
+    } else {
+        println!("{}", "Failed to create progress bar".red().bold());
+        progress_bar = None;
+    }
 
     // Wait for all the join handles to finish
     for join_handle in join_handles {
         join_handle.await?;
+        if let Some(progress_bar) = &progress_bar {
+            progress_bar.inc(1);
+        }
     }
 
-    // Stop the timer
-    let duration: Duration = start.elapsed();
-    let text: String = format!("Tasks finished in {:?}", duration);
-    println!("{}", text.green().bold());
+    // Finish the progress bar
+    if let Some(progress_bar) = progress_bar {
+        progress_bar.finish();
+    }
 
     Ok(())
 }
