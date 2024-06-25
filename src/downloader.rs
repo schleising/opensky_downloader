@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_util;
@@ -75,7 +73,7 @@ impl std::error::Error for DownloadError {}
 
 async fn receive_records<'r, R, D>(
     records: &mut csv_async::DeserializeRecordsStreamPos<'r, R, D>,
-    arc_collection: Arc<Collection<D>>,
+    collection: &Collection<D>,
     join_handles: &mut Vec<JoinHandle<()>>,
     progress_bar: &Option<ProgressBar>,
 ) -> Result<bool, DownloadError>
@@ -120,7 +118,7 @@ where
 
     if records_vec.len() > 0 {
         // Clone the Arc to share the collection between tasks
-        let collection: Arc<Collection<D>> = arc_collection.clone();
+        let collection: Collection<D> = collection.clone();
 
         join_handles.push(tokio::spawn(async move {
             // Insert the aircraft into the collection
@@ -199,9 +197,6 @@ where
     // Iterate over the records
     let mut records = csv_reader.deserialize_with_pos::<T>();
 
-    // Create an Arc to share the collection between tasks
-    let arc_collection: Arc<Collection<T>> = Arc::new(collection);
-
     // Create a vector to store the join handles
     let mut join_handles: Vec<JoinHandle<()>> = Vec::new();
 
@@ -223,7 +218,7 @@ where
     while !finished {
         finished = receive_records(
             &mut records,
-            arc_collection.clone(),
+            &collection,
             &mut join_handles,
             &progress_bar,
         )
@@ -237,7 +232,7 @@ where
 
     // Create a progress bar for the join handles
     if let Ok(progress_bar_style) = style::ProgressStyle::default_bar()
-        .template("{spinner:.green} {msg} [{elapsed_precise}] [{bar:40.cyan/blue}] ({pos}/{len})")
+        .template("{spinner:.green} {msg} [{elapsed_precise}] [{bar:40.cyan/blue}] ({pos}/{len}) ({eta})")
     {
         progress_bar = Some(
             ProgressBar::new(join_handles.len() as u64)
