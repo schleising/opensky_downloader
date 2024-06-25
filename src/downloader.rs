@@ -1,9 +1,14 @@
 use tokio::task::JoinHandle;
+use tokio::io::AsyncRead;
 use tokio_stream::StreamExt;
-use tokio_util;
+use tokio_util::io::StreamReader;
+
+use futures::stream::TryStreamExt;
 
 use serde::de::DeserializeOwned;
 use serde::ser::Serialize;
+
+use csv_async;
 
 use mongodb::IndexModel;
 use mongodb::{Client, Collection, Database};
@@ -78,7 +83,7 @@ async fn receive_records<'r, R, D>(
     progress_bar: &Option<ProgressBar>,
 ) -> Result<bool, DownloadError>
 where
-    R: tokio::io::AsyncRead + Unpin + Send,
+    R: AsyncRead + Unpin + Send,
     D: DeserializeOwned + Serialize + Send + Sync + FilterMap + 'static,
 {
     // True if the records are finished
@@ -135,11 +140,9 @@ where
     Ok(finished)
 }
 
-fn response_to_async_read(resp: reqwest::Response) -> impl tokio::io::AsyncRead {
-    use futures::stream::TryStreamExt;
-
+fn response_to_async_read(resp: reqwest::Response) -> impl AsyncRead {
     let stream = resp.bytes_stream().map_err(std::io::Error::other);
-    tokio_util::io::StreamReader::new(stream)
+    StreamReader::new(stream)
 }
 
 pub async fn download<T>(url: &str) -> Result<(), DownloadError>
