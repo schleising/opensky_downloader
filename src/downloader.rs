@@ -1,9 +1,8 @@
 use tokio::task::JoinHandle;
 use tokio::io::AsyncRead;
-use tokio_stream::StreamExt;
 use tokio_util::io::StreamReader;
 
-use futures::stream::TryStreamExt;
+use futures::stream::{StreamExt, TryStreamExt};
 
 use serde::de::DeserializeOwned;
 use serde::ser::Serialize;
@@ -60,6 +59,12 @@ impl From<csv_async::Error> for DownloadError {
 impl From<tokio::task::JoinError> for DownloadError {
     fn from(error: tokio::task::JoinError) -> Self {
         DownloadError::JoinError(error)
+    }
+}
+
+impl From<DownloadError> for std::io::Error {
+    fn from(error: DownloadError) -> Self {
+        std::io::Error::new(std::io::ErrorKind::Other, error)
     }
 }
 
@@ -140,11 +145,6 @@ where
     Ok(finished)
 }
 
-fn response_to_async_read(resp: reqwest::Response) -> impl AsyncRead {
-    let stream = resp.bytes_stream().map_err(std::io::Error::other);
-    StreamReader::new(stream)
-}
-
 pub async fn download<T>(url: &str) -> Result<(), DownloadError>
 where
     T: DeserializeOwned + Serialize + FilterMap + Send + Sync + 'static,
@@ -191,11 +191,14 @@ where
         .build();
     collection.create_index(index, None).await?;
 
-    // Convert the response to an async read
-    let reader = response_to_async_read(response);
+    // Get the response as a stream of bytes
+    let bytes_stream = response.bytes_stream().map_err(DownloadError::ReqwestError);
+
+    // Convert the stream of bytes to an AsyncRead
+    let stream_reader = StreamReader::new(bytes_stream);
 
     // Create a CSV reader
-    let mut csv_reader = csv_async::AsyncDeserializer::from_reader(reader);
+    let mut csv_reader = csv_async::AsyncDeserializer::from_reader(stream_reader);
 
     // Iterate over the records
     let mut records = csv_reader.deserialize_with_pos::<T>();
