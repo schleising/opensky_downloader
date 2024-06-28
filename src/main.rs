@@ -1,5 +1,6 @@
-mod downloader;
+mod db_writer;
 mod models;
+mod record_downloader;
 
 use std::process::exit;
 use std::time::{Duration, Instant};
@@ -8,10 +9,21 @@ use colored::Colorize;
 
 use models::Aircraft;
 
-use downloader::download;
+use indicatif::{style, ProgressBar};
+
+use record_downloader::DownloadInfo;
+
+use db_writer::DatabaseWriter;
+
+const MONGO_HOST: &str = "macmini2";
+const DATABASE_NAME: &str = "web_database";
+const COLLECTION_NAME: &str = "aircraft_collection";
 
 enum ExitCodes {
+    Success = 0,
     DownloadError = 1,
+    DatabaseError = 2,
+    JoinError = 3,
 }
 
 #[tokio::main]
@@ -19,24 +31,18 @@ async fn main() {
     // Start a timer
     let start: Instant = Instant::now();
 
-    // URL to download the file from
-    let url: &str = "https://opensky-network.org/datasets/metadata/aircraftDatabase.csv";
+    // Exit code
+    let exit_code: ExitCodes;
 
-    // Download the file
-    match download::<Aircraft>(url).await {
-        Ok(_) => {}
-        Err(e) => {
-            // Print an error message and exit
-            let error: String = format!("Error: {}", e);
-            eprintln!("{}", error.red().bold());
-
-            // Stop the timer
-            let duration: Duration = start.elapsed();
-            let text: String = format!("Program ran in {:?}", duration);
-            println!("{}", text.blue().bold());
-
-            // Exit with the DownloadError exit code
-            exit(ExitCodes::DownloadError as i32);
+    // Create a new database writer
+    match DatabaseWriter::<Aircraft>::new(MONGO_HOST, DATABASE_NAME, COLLECTION_NAME).await {
+        Ok(mut db_writer) => {
+            exit_code = download_and_store(&mut db_writer).await;
+        }
+        Err(error) => {
+            let text = format!("Error: {}", error);
+            eprintln!("{}", text.red().bold());
+            exit_code = ExitCodes::DatabaseError;
         }
     }
 
@@ -44,4 +50,101 @@ async fn main() {
     let duration: Duration = start.elapsed();
     let text: String = format!("Program ran in {:?}", duration);
     println!("{}", text.blue().bold());
+
+    exit(exit_code as i32);
+}
+
+async fn download_and_store(db_writer: &mut DatabaseWriter<Aircraft>) -> ExitCodes {
+    // Exit code
+    let mut exit_code: ExitCodes = ExitCodes::Success;
+
+    // URL to download the file from
+    let url: &str = "https://www.schleising.net/aircraftDatabase.csv";
+
+    // Create a new DownloadInfo struct
+    let mut download_info: DownloadInfo<Aircraft> = DownloadInfo::new();
+
+    match download_info.download(url).await {
+        Ok(join_handle) => {
+            // File found successfully, drop the collection
+            db_writer.drop_collection().await.unwrap();
+
+            // Handle the download
+            handle_download(&mut download_info, db_writer).await;
+
+            // Wait for the task to finish
+            match join_handle.await {
+                Ok(_) => {
+                    let text: String = "Download complete".to_string();
+                    println!("{}", text.green().bold());
+                }
+                Err(error) => {
+                    let text = format!("Error: {}", error);
+                    eprintln!("{}", text.red().bold());
+                    exit_code = ExitCodes::JoinError;
+                }
+            }
+        }
+        Err(error) => {
+            let text = format!("Error: {}", error);
+            eprintln!("{}", text.red().bold());
+            exit_code = ExitCodes::DownloadError;
+        }
+    }
+
+    exit_code
+}
+
+async fn handle_download(
+    download_info: &mut DownloadInfo<Aircraft>,
+    db_writer: &mut DatabaseWriter<Aircraft>,
+) {
+    // Create a progress bar
+    let progress_bar: Option<ProgressBar>;
+
+    // Set up the progress bar
+    if let Ok(progress_bar_style) = style::ProgressStyle::default_bar().template(
+        "{spinner:.green} {msg} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})",
+    ) {
+        progress_bar = Some(ProgressBar::new(download_info.content_length).with_style(progress_bar_style).with_message("Downloading records"));
+    } else {
+        println!("{}", "Failed to create progress bar".red().bold());
+        progress_bar = None;
+    }
+
+    // Download the file
+    while let Some(mut record_info) = download_info.rx_channel.recv().await {
+        // Print the progress
+        if let Some(progress_bar) = &progress_bar {
+            progress_bar.set_position(record_info.position);
+        }
+
+        // Increment the counter
+        if record_info.record.icao24.is_empty() {
+            continue;
+        }
+
+        // Convert the ICAO24 to uppercase
+        record_info.record.icao24 = record_info.record.icao24.to_uppercase();
+
+        // Insert the record into the database
+        db_writer.add_record(record_info.record)
+    }
+
+    // Finish the progress bar
+    if let Some(progress_bar) = &progress_bar {
+        progress_bar.finish();
+    }
+
+    // Finish writing the records
+    match db_writer.finish().await {
+        Ok(_) => {
+            let text: String = "All records inserted".to_string();
+            println!("{}", text.green().bold());
+        }
+        Err(error) => {
+            let text = format!("Error: {}", error);
+            eprintln!("{}", text.red().bold());
+        }
+    }
 }
