@@ -8,14 +8,13 @@ use tokio_util::io::StreamReader;
 use futures::stream::{StreamExt, TryStreamExt};
 
 use serde::de::DeserializeOwned;
-use serde::ser::Serialize;
 
 use csv_async::{self, DeserializeRecordsStreamPos};
 
 // Errors that can occur
 pub enum DownloadError<D>
 where
-    D: DeserializeOwned + Serialize + Send + Sync + 'static,
+    D: DeserializeOwned + Send + Sync + 'static,
 {
     ReqwestError(reqwest::Error),
     CsvError(csv_async::Error),
@@ -25,7 +24,7 @@ where
 
 impl<D> From<reqwest::Error> for DownloadError<D>
 where
-    D: DeserializeOwned + Serialize + Send + Sync + 'static,
+    D: DeserializeOwned + Send + Sync + 'static,
 {
     fn from(error: reqwest::Error) -> Self {
         DownloadError::ReqwestError(error)
@@ -34,7 +33,7 @@ where
 
 impl<D> From<csv_async::Error> for DownloadError<D>
 where
-    D: DeserializeOwned + Serialize + Send + Sync + 'static,
+    D: DeserializeOwned + Send + Sync + 'static,
 {
     fn from(error: csv_async::Error) -> Self {
         DownloadError::CsvError(error)
@@ -43,7 +42,7 @@ where
 
 impl<D> From<mpsc::error::SendError<RecordInfo<D>>> for DownloadError<D>
 where
-    D: DeserializeOwned + Serialize + Send + Sync + 'static,
+    D: DeserializeOwned + Send + Sync + 'static,
 {
     fn from(error: mpsc::error::SendError<RecordInfo<D>>) -> Self {
         DownloadError::SendError(error)
@@ -52,7 +51,7 @@ where
 
 impl<D> From<DownloadError<D>> for std::io::Error
 where
-    D: DeserializeOwned + Serialize + Send + Sync + 'static,
+    D: DeserializeOwned + Send + Sync + 'static,
 {
     fn from(error: DownloadError<D>) -> Self {
         std::io::Error::new(std::io::ErrorKind::Other, error)
@@ -61,7 +60,7 @@ where
 
 impl<D> std::fmt::Display for DownloadError<D>
 where
-    D: DeserializeOwned + Serialize + Send + Sync + 'static,
+    D: DeserializeOwned + Send + Sync + 'static,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -75,7 +74,7 @@ where
 
 impl<D> std::fmt::Debug for DownloadError<D>
 where
-    D: DeserializeOwned + Serialize + Send + Sync + 'static,
+    D: DeserializeOwned + Send + Sync + 'static,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -88,7 +87,7 @@ where
 }
 
 impl<D> std::error::Error for DownloadError<D> where
-    D: DeserializeOwned + Serialize + Send + Sync + 'static
+    D: DeserializeOwned + Send + Sync + 'static
 {
 }
 
@@ -105,7 +104,7 @@ pub struct RecordInfo<D> {
 
 impl<D> DownloadInfo<D>
 where
-    D: DeserializeOwned + Serialize + Send + Sync + 'static,
+    D: DeserializeOwned + Send + Sync + 'static,
 {
     pub fn new() -> Self {
         // Create a tokio channel to send records to
@@ -171,7 +170,7 @@ async fn iterate_records<'r, R, D>(
 ) -> Result<(), DownloadError<D>>
 where
     R: AsyncRead + Send + Unpin,
-    D: DeserializeOwned + Serialize + Send + Sync + 'static,
+    D: DeserializeOwned + Send + Sync + 'static,
 {
     // Iterate over the records
     while let Some((record, pos)) = records.next().await {
