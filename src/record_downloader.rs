@@ -86,7 +86,8 @@ where
     }
 }
 
-impl<D> std::error::Error for DownloadError<D> where
+impl<D> std::error::Error for DownloadError<D>
+where
     D: DeserializeOwned + Send + Sync + 'static
 {
 }
