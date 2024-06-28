@@ -75,7 +75,6 @@ where
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn create_index(&self, field: &str) -> Result<(), DatabaseError> {
         let model: IndexModel = IndexModel::builder().keys(doc! { field: 1 }).build();
         self.collection.create_index(model, None).await?;

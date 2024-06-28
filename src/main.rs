@@ -69,6 +69,9 @@ async fn download_and_store(db_writer: &mut DatabaseWriter<Aircraft>) -> ExitCod
             // File found successfully, drop the collection
             db_writer.drop_collection().await.unwrap();
 
+            // Create an index on the registration field
+            db_writer.create_index("registration").await.unwrap();
+
             // Handle the download
             handle_download(&mut download_info, db_writer).await;
 
