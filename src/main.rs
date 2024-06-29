@@ -65,13 +65,13 @@ async fn main() {
     }
 
     // Set the MongoDB hostname
-    let mongo_host = cli.mongo_host.unwrap_or_else(|| MONGO_HOST.to_string());
+    let mongo_host = cli.mongo_host.as_deref().unwrap_or_else(|| MONGO_HOST);
 
     // Set the database name
-    let database_name = cli.database_name.unwrap_or_else(|| DATABASE_NAME.to_string());
+    let database_name = cli.database_name.as_deref().unwrap_or_else(|| DATABASE_NAME);
 
     // Set the collection name
-    let collection_name = cli.collection_name.unwrap_or_else(|| COLLECTION_NAME.to_string());
+    let collection_name = cli.collection_name.as_deref().unwrap_or_else(|| COLLECTION_NAME);
 
     // Exit code
     let exit_code: ExitCodes;
@@ -81,10 +81,13 @@ async fn main() {
     println!("{}", text.blue().bold());
 
     // Create a new database writer
-    match DatabaseWriter::<Aircraft>::new(&mongo_host, &database_name, &collection_name).await {
+    match DatabaseWriter::<Aircraft>::new(mongo_host, database_name, collection_name).await {
         Ok(mut db_writer) => {
-            // Print that we are connected to the database
-            let text: String = "Connected to MongoDB".to_string();
+            // Print that we are connected to the database, showing the database and collection names
+            let text: String = format!(
+                "Connected to MongoDB on {} - Database: {} - Collection: {}",
+                mongo_host, database_name, collection_name
+            );
             println!("{}", text.green().bold());
 
             // Download and store the records
