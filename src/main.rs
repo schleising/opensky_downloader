@@ -54,15 +54,11 @@ async fn main() {
     // Parse the command line arguments
     let cli: Cli = Cli::parse();
 
-    // URL to download the file from
-    let url: &str;
-
     // Set the URL based on the test flag
-    if cli.test {
-        url = "https://www.schleising.net/aircraftDatabase.csv";
-    } else {
-        url = "https://opensky-network.org/datasets/metadata/aircraftDatabase.csv";
-    }
+    let url = match cli.test {
+        true => "https://www.schleising.net/aircraftDatabase.csv",
+        false => "https://opensky-network.org/datasets/metadata/aircraftDatabase.csv",
+    };
 
     // Set the MongoDB hostname
     let mongo_host = cli.mongo_host.as_deref().unwrap_or_else(|| MONGO_HOST);
