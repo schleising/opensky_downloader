@@ -5,19 +5,39 @@ mod record_downloader;
 use std::process::exit;
 use std::time::{Duration, Instant};
 
-use colored::Colorize;
+use clap::Parser;
 
-use models::Aircraft;
+use colored::Colorize;
 
 use indicatif::{style, ProgressBar};
 
-use record_downloader::DownloadInfo;
-
 use db_writer::DatabaseWriter;
+use models::Aircraft;
+use record_downloader::DownloadInfo;
 
 const MONGO_HOST: &str = "macmini2";
 const DATABASE_NAME: &str = "web_database";
 const COLLECTION_NAME: &str = "aircraft_collection";
+
+#[derive(Parser)]
+#[command(version, about)]
+struct Cli {
+    #[clap(short, long)]
+    /// Run the program in test mode, gets the database from a different location
+    test: bool,
+
+    #[clap(short, long)]
+    /// Set the MongoDB hostname
+    mongo_host: Option<String>,
+
+    #[clap(short, long)]
+    /// Set the database name
+    database_name: Option<String>,
+
+    #[clap(short, long)]
+    /// Set the collection name
+    collection_name: Option<String>,
+}
 
 enum ExitCodes {
     Success = 0,
@@ -31,22 +51,44 @@ async fn main() {
     // Start a timer
     let start: Instant = Instant::now();
 
+    // Parse the command line arguments
+    let cli: Cli = Cli::parse();
+
+    // URL to download the file from
+    let url: &str;
+
+    // Set the URL based on the test flag
+    if cli.test {
+        url = "https://www.schleising.net/aircraftDatabase.csv";
+    } else {
+        url = "https://opensky-network.org/datasets/metadata/aircraftDatabase.csv";
+    }
+
+    // Set the MongoDB hostname
+    let mongo_host = cli.mongo_host.unwrap_or_else(|| MONGO_HOST.to_string());
+
+    // Set the database name
+    let database_name = cli.database_name.unwrap_or_else(|| DATABASE_NAME.to_string());
+
+    // Set the collection name
+    let collection_name = cli.collection_name.unwrap_or_else(|| COLLECTION_NAME.to_string());
+
     // Exit code
     let exit_code: ExitCodes;
 
     // Print that we are connecting to the database
-    let text: String = format!("Connecting to MongoDB on {}", MONGO_HOST);
+    let text: String = format!("Connecting to MongoDB on {}", mongo_host);
     println!("{}", text.blue().bold());
 
     // Create a new database writer
-    match DatabaseWriter::<Aircraft>::new(MONGO_HOST, DATABASE_NAME, COLLECTION_NAME).await {
+    match DatabaseWriter::<Aircraft>::new(&mongo_host, &database_name, &collection_name).await {
         Ok(mut db_writer) => {
             // Print that we are connected to the database
             let text: String = "Connected to MongoDB".to_string();
             println!("{}", text.green().bold());
 
             // Download and store the records
-            exit_code = download_and_store(&mut db_writer).await;
+            exit_code = download_and_store(&mut db_writer, url).await;
         }
         Err(error) => {
             let text = format!("Error: {}", error);
@@ -63,12 +105,9 @@ async fn main() {
     exit(exit_code as i32);
 }
 
-async fn download_and_store(db_writer: &mut DatabaseWriter<Aircraft>) -> ExitCodes {
+async fn download_and_store(db_writer: &mut DatabaseWriter<Aircraft>, url: &str) -> ExitCodes {
     // Exit code
     let mut exit_code: ExitCodes = ExitCodes::Success;
-
-    // URL to download the file from
-    let url: &str = "https://opensky-network.org/datasets/metadata/aircraftDatabase.csv";
 
     // Create a new DownloadInfo struct
     let mut download_info: DownloadInfo<Aircraft> = DownloadInfo::new();
@@ -173,6 +212,10 @@ async fn download_and_store(db_writer: &mut DatabaseWriter<Aircraft>) -> ExitCod
     if let Some(progress_bar) = &progress_bar {
         progress_bar.finish();
     }
+
+    // Print that we are finishing writing the records
+    let text: String = "Finished inserting records".to_string();
+    println!("{}", text.green().bold());
 
     exit_code
 }
