@@ -41,6 +41,11 @@ async fn main() {
     // Create a new database writer
     match DatabaseWriter::<Aircraft>::new(MONGO_HOST, DATABASE_NAME, COLLECTION_NAME).await {
         Ok(mut db_writer) => {
+            // Print that we are connected to the database
+            let text: String = "Connected to MongoDB".to_string();
+            println!("{}", text.green().bold());
+
+            // Download and store the records
             exit_code = download_and_store(&mut db_writer).await;
         }
         Err(error) => {
@@ -146,7 +151,11 @@ async fn download_and_store(db_writer: &mut DatabaseWriter<Aircraft>) -> ExitCod
     if let Ok(progress_bar_style) = style::ProgressStyle::default_bar().template(
         "{spinner:.green} {msg} [{elapsed_precise}] [{bar:40.cyan/blue}] {percent}% ({eta})",
     ) {
-        progress_bar = Some(ProgressBar::new(100).with_style(progress_bar_style).with_message("Inserting records  "));
+        progress_bar = Some(
+            ProgressBar::new(100)
+                .with_style(progress_bar_style)
+                .with_message("Inserting records  "),
+        );
     } else {
         println!("{}", "Failed to create progress bar".red().bold());
         progress_bar = None;

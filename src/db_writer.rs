@@ -1,8 +1,8 @@
 use std::mem;
 
+use bson::doc;
 use mongodb::IndexModel;
 use mongodb::{Client, Collection, Database};
-use bson::doc;
 
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio::task::{spawn, JoinError, JoinHandle};
@@ -53,7 +53,10 @@ where
         collection_name: &str,
     ) -> Result<Self, DatabaseError> {
         // Construct the URI for the MongoDB connection
-        let uri: String = format!("mongodb://{}:27017/?serverSelectionTimeoutMS=2000", hostname);
+        let uri: String = format!(
+            "mongodb://{}:27017/?serverSelectionTimeoutMS=2000",
+            hostname
+        );
         let client = Client::with_uri_str(&uri).await?;
         let database: Database = client.database(database_name);
         let collection: Collection<T> = database.collection(collection_name);

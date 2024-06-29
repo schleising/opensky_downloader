@@ -86,11 +86,7 @@ where
     }
 }
 
-impl<D> std::error::Error for DownloadError<D>
-where
-    D: DeserializeOwned + Send + Sync + 'static
-{
-}
+impl<D> std::error::Error for DownloadError<D> where D: DeserializeOwned + Send + Sync + 'static {}
 
 pub struct DownloadInfo<D> {
     pub content_length: u64,
