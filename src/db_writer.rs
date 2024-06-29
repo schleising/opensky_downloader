@@ -4,6 +4,7 @@ use mongodb::IndexModel;
 use mongodb::{Client, Collection, Database};
 use bson::doc;
 
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio::task::{spawn, JoinError, JoinHandle};
 
 const DEFAULT_CHUNK_SIZE: usize = 1000;
@@ -116,15 +117,46 @@ where
         }
     }
 
-    pub async fn finish(&mut self) -> Result<(), DatabaseError> {
+    pub fn finish(&mut self) -> UnboundedReceiver<f64> {
         // Write the remaining records
         self.write_records();
 
-        // Wait for all the tasks to finish
-        for join_handle in self.join_handles.drain(..) {
-            join_handle.await??;
-        }
+        // Get the join handles into a new vector
+        let mut join_handles = mem::take(&mut self.join_handles);
 
-        Ok(())
+        // Create a channel to wait for the tasks to finish
+        let (tx, rx) = unbounded_channel::<f64>();
+
+        // Spawn a new task to wait for all the tasks to finish
+        spawn(async move {
+            // Get the number of tasks
+            let tasks = join_handles.len() as u64;
+
+            // Initialise a counter
+            let mut counter: u64 = 0;
+
+            // Wait for all the tasks to finish
+            for join_handle in join_handles.drain(..) {
+                match join_handle.await {
+                    Ok(_) => {
+                        // Increment the counter
+                        counter += 1;
+
+                        // Calculate the percentage complete
+                        let percentage = (counter as f64 / tasks as f64) * 100.0;
+
+                        // Send the percentage complete
+                        let _ = tx.send(percentage);
+                    }
+                    Err(_) => {}
+                }
+            }
+
+            // Send OK to close the receiver
+            let _ = tx.send(100.0);
+        });
+
+        // Return the receiver
+        rx
     }
 }

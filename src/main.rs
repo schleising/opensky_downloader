@@ -132,6 +132,39 @@ async fn download_and_store(db_writer: &mut DatabaseWriter<Aircraft>) -> ExitCod
         }
     }
 
+    // Print that we are finishing writing the records
+    let text: String = "Finishing inserting records".to_string();
+    println!("{}", text.blue().bold());
+
+    // Finish writing the records
+    let mut channel = db_writer.finish();
+
+    // Create a progress bar to show percentage complete
+    let progress_bar: Option<ProgressBar>;
+
+    // Set up the progress bar
+    if let Ok(progress_bar_style) = style::ProgressStyle::default_bar().template(
+        "{spinner:.green} {msg} [{elapsed_precise}] [{bar:40.cyan/blue}] {percent}% ({eta})",
+    ) {
+        progress_bar = Some(ProgressBar::new(100).with_style(progress_bar_style).with_message("Inserting records  "));
+    } else {
+        println!("{}", "Failed to create progress bar".red().bold());
+        progress_bar = None;
+    }
+
+    // Wait for the task to finish
+    while let Some(percentage) = channel.recv().await {
+        // Print the progress
+        if let Some(progress_bar) = &progress_bar {
+            progress_bar.set_position(percentage as u64);
+        }
+    }
+
+    // Finish the progress bar
+    if let Some(progress_bar) = &progress_bar {
+        progress_bar.finish();
+    }
+
     exit_code
 }
 
@@ -174,21 +207,5 @@ async fn handle_download(
     // Finish the progress bar
     if let Some(progress_bar) = &progress_bar {
         progress_bar.finish();
-    }
-
-    // Print that we are finishing writing the records
-    let text: String = "Finishing writing records".to_string();
-    println!("{}", text.blue().bold());
-
-    // Finish writing the records
-    match db_writer.finish().await {
-        Ok(_) => {
-            let text: String = "All records inserted".to_string();
-            println!("{}", text.green().bold());
-        }
-        Err(error) => {
-            let text = format!("Error: {}", error);
-            eprintln!("{}", text.red().bold());
-        }
     }
 }
