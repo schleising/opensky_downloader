@@ -102,7 +102,7 @@ async fn main() {
 
     // Stop the timer
     let duration: Duration = start.elapsed();
-    let text: String = format!("Program ran in {:?}", duration);
+    let text: String = format!("Program ran in {:.2?}", duration);
     println!("{}", text.blue().bold());
 
     exit(exit_code as i32);
