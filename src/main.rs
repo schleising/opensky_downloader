@@ -68,7 +68,7 @@ async fn download_and_store(db_writer: &mut DatabaseWriter<Aircraft>) -> ExitCod
     let mut exit_code: ExitCodes = ExitCodes::Success;
 
     // URL to download the file from
-    let url: &str = "https://www.schleising.net/aircraftDatabase.csv";
+    let url: &str = "https://opensky-network.org/datasets/metadata/aircraftDatabase.csv";
 
     // Create a new DownloadInfo struct
     let mut download_info: DownloadInfo<Aircraft> = DownloadInfo::new();
