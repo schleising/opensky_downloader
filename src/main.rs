@@ -34,6 +34,10 @@ async fn main() {
     // Exit code
     let exit_code: ExitCodes;
 
+    // Print that we are connecting to the database
+    let text: String = format!("Connecting to MongoDB on {}", MONGO_HOST);
+    println!("{}", text.blue().bold());
+
     // Create a new database writer
     match DatabaseWriter::<Aircraft>::new(MONGO_HOST, DATABASE_NAME, COLLECTION_NAME).await {
         Ok(mut db_writer) => {
@@ -64,13 +68,46 @@ async fn download_and_store(db_writer: &mut DatabaseWriter<Aircraft>) -> ExitCod
     // Create a new DownloadInfo struct
     let mut download_info: DownloadInfo<Aircraft> = DownloadInfo::new();
 
+    // Print that we are downloading the file
+    let text: String = format!("Downloading file from {}", url);
+    println!("{}", text.blue().bold());
+
+    // Download the file
     match download_info.download(url).await {
         Ok(join_handle) => {
+            // Print that we are dropping the collection
+            let text: String = "URL found, dropping collection".to_string();
+            println!("{}", text.blue().bold());
+
             // File found successfully, drop the collection
-            db_writer.drop_collection().await.unwrap();
+            match db_writer.drop_collection().await {
+                Ok(_) => {
+                    let text: String = "Collection dropped".to_string();
+                    println!("{}", text.green().bold());
+                }
+                Err(error) => {
+                    let text = format!("Error: {}", error);
+                    eprintln!("{}", text.red().bold());
+                    return ExitCodes::DatabaseError;
+                }
+            }
+
+            // Print that we are creating an index
+            let text: String = "Creating new index".to_string();
+            println!("{}", text.blue().bold());
 
             // Create an index on the registration field
-            db_writer.create_index("registration").await.unwrap();
+            match db_writer.create_index("registration").await {
+                Ok(_) => {
+                    let text: String = "Index created".to_string();
+                    println!("{}", text.green().bold());
+                }
+                Err(error) => {
+                    let text = format!("Error: {}", error);
+                    eprintln!("{}", text.red().bold());
+                    return ExitCodes::DatabaseError;
+                }
+            }
 
             // Handle the download
             handle_download(&mut download_info, db_writer).await;

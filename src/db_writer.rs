@@ -2,8 +2,8 @@ use std::mem;
 
 use mongodb::IndexModel;
 use mongodb::{Client, Collection, Database};
-
 use bson::doc;
+
 use tokio::task::{spawn, JoinError, JoinHandle};
 
 const DEFAULT_CHUNK_SIZE: usize = 1000;
@@ -52,17 +52,23 @@ where
         collection_name: &str,
     ) -> Result<Self, DatabaseError> {
         // Construct the URI for the MongoDB connection
-        let uri: String = format!("mongodb://{}:27017", hostname);
+        let uri: String = format!("mongodb://{}:27017/?serverSelectionTimeoutMS=2000", hostname);
         let client = Client::with_uri_str(&uri).await?;
         let database: Database = client.database(database_name);
         let collection: Collection<T> = database.collection(collection_name);
 
-        Ok(DatabaseWriter {
+        let db_writer = Ok(DatabaseWriter {
             collection,
             chunk_size: DEFAULT_CHUNK_SIZE,
             records: Vec::with_capacity(DEFAULT_CHUNK_SIZE),
             join_handles: Vec::new(),
-        })
+        });
+
+        // Ping the server to check if the connection is successful
+        database.run_command(doc! { "ping": 1 }, None).await?;
+
+        // Return the database writer
+        db_writer
     }
 
     #[allow(dead_code)]
