@@ -60,14 +60,18 @@ where
         Ok(DatabaseWriter {
             collection,
             chunk_size: DEFAULT_CHUNK_SIZE,
-            records: Vec::new(),
+            records: Vec::with_capacity(DEFAULT_CHUNK_SIZE),
             join_handles: Vec::new(),
         })
     }
 
     #[allow(dead_code)]
     pub fn set_chunk_size(&mut self, chunk_size: usize) {
+        // Set the chunk size
         self.chunk_size = chunk_size;
+
+        // Create a new vector with the new capacity
+        self.records = Vec::with_capacity(chunk_size);
     }
 
     pub async fn drop_collection(&self) -> Result<(), DatabaseError> {
@@ -82,8 +86,8 @@ where
     }
 
     fn write_records(&mut self) {
-        // Create a new vector and take the old one
-        let records_vec = mem::take(&mut self.records);
+        // Create a new vector and take the old one, using mem::replace to avoid a clone
+        let records_vec = mem::replace(&mut self.records, Vec::with_capacity(self.chunk_size));
 
         // Clone the collection
         let collection = self.collection.clone();
