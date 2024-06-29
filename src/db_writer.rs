@@ -36,7 +36,10 @@ impl std::fmt::Display for DatabaseError {
     }
 }
 
-pub struct DatabaseWriter<T> {
+pub struct DatabaseWriter<T>
+where
+    T: Send + Sync + serde::Serialize + 'static,
+{
     collection: Collection<T>,
     chunk_size: usize,
     records: Vec<T>,
@@ -69,7 +72,7 @@ where
         });
 
         // Ping the server to check if the connection is successful
-        database.run_command(doc! { "ping": 1 }, None).await?;
+        database.run_command(doc! { "ping": 1 }).await?;
 
         // Return the database writer
         db_writer
@@ -85,13 +88,13 @@ where
     }
 
     pub async fn drop_collection(&self) -> Result<(), DatabaseError> {
-        self.collection.drop(None).await?;
+        self.collection.drop().await?;
         Ok(())
     }
 
     pub async fn create_index(&self, field: &str) -> Result<(), DatabaseError> {
         let model: IndexModel = IndexModel::builder().keys(doc! { field: 1 }).build();
-        self.collection.create_index(model, None).await?;
+        self.collection.create_index(model).await?;
         Ok(())
     }
 
@@ -105,7 +108,7 @@ where
         // Spawn a new task to insert the records
         self.join_handles.push(spawn(async move {
             // Insert the aircraft into the collection
-            collection.insert_many(records_vec, None).await?;
+            collection.insert_many(records_vec).await?;
 
             // Return Ok
             Ok(())
