@@ -176,6 +176,10 @@ async fn handle_download(
         progress_bar.finish();
     }
 
+    // Print that we are finishing writing the records
+    let text: String = "Finishing writing records".to_string();
+    println!("{}", text.blue().bold());
+
     // Finish writing the records
     match db_writer.finish().await {
         Ok(_) => {
