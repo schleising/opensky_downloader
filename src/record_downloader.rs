@@ -144,7 +144,10 @@ where
             let stream_reader = StreamReader::new(bytes_stream);
 
             // Create a CSV reader
-            let mut csv_reader = csv_async::AsyncDeserializer::from_reader(stream_reader);
+            // let mut csv_reader = csv_async::AsyncDeserializer::from_reader(stream_reader);
+            let mut csv_reader = csv_async::AsyncReaderBuilder::new()
+                .quote(b'\'')
+                .create_deserializer(stream_reader);
 
             // Create a deserializer
             let mut records = csv_reader.deserialize_with_pos::<D>();

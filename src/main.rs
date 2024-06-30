@@ -5,6 +5,8 @@ mod record_downloader;
 use std::process::exit;
 use std::time::{Duration, Instant};
 
+use chrono::Datelike;
+
 use clap::Parser;
 
 use colored::Colorize;
@@ -60,10 +62,15 @@ async fn main() {
     // Parse the command line arguments
     let cli: Cli = Cli::parse();
 
+    // Get the current year and month
+    let (_, current_year) = chrono::Utc::now().year_ce();
+    let current_month: u32 = chrono::Utc::now().month();
+
     // Set the URL based on the test flag
+    // Format the url based on the current year, month and the test flag
     let url = match cli.test {
-        true => "https://www.schleising.net/aircraftDatabase.csv",
-        false => "https://opensky-network.org/datasets/metadata/aircraftDatabase.csv",
+        true => format!("https://www.schleising.net/aircraft-database-complete-{:04}-{:02}.csv", current_year, current_month),
+        false => format!("https://opensky-network.org/datasets/metadata/aircraft-database-complete-{:04}-{:02}.csv", current_year, current_month),        
     };
 
     // Set the MongoDB hostname
@@ -93,7 +100,7 @@ async fn main() {
             println!("{}", text.green().bold());
 
             // Download and store the records
-            exit_code = download_and_store(&mut db_writer, url).await;
+            exit_code = download_and_store(&mut db_writer, &url).await;
         }
         Err(error) => {
             let text = format!("Error: {}", error);
