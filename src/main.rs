@@ -61,13 +61,13 @@ async fn main() {
     };
 
     // Set the MongoDB hostname
-    let mongo_host = cli.mongo_host.as_deref().unwrap_or_else(|| MONGO_HOST);
+    let mongo_host = cli.mongo_host.as_deref().unwrap_or(MONGO_HOST);
 
     // Set the database name
-    let database_name = cli.database_name.as_deref().unwrap_or_else(|| DATABASE_NAME);
+    let database_name = cli.database_name.as_deref().unwrap_or(DATABASE_NAME);
 
     // Set the collection name
-    let collection_name = cli.collection_name.as_deref().unwrap_or_else(|| COLLECTION_NAME);
+    let collection_name = cli.collection_name.as_deref().unwrap_or(COLLECTION_NAME);
 
     // Exit code
     let exit_code: ExitCodes;
