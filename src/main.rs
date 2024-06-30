@@ -51,6 +51,12 @@ async fn main() {
     // Start a timer
     let start: Instant = Instant::now();
 
+    // Print the program name and version
+    let text: String = format!("Aircraft Database Updater v{}", env!("CARGO_PKG_VERSION"));
+    println!("");
+    println!("{}", text.cyan().bold());
+    println!("");
+
     // Parse the command line arguments
     let cli: Cli = Cli::parse();
 
