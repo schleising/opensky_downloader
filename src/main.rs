@@ -184,7 +184,7 @@ async fn download_and_store(db_writer: &mut DatabaseWriter<Aircraft>, url: &str)
         Err(error) => {
             let text = format!("Error: {}", error);
             eprintln!("{}", text.red().bold());
-            exit_code = ExitCodes::DownloadError;
+            return ExitCodes::DownloadError;
         }
     }
 
