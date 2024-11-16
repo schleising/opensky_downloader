@@ -19,6 +19,7 @@ where
     ReqwestError(reqwest::Error),
     CsvError(csv_async::Error),
     SendError(mpsc::error::SendError<RecordInfo<D>>),
+    ZeroLengthError,
     ChannelError,
 }
 
@@ -67,6 +68,7 @@ where
             DownloadError::ReqwestError(e) => write!(f, "Reqwest error: {}", e),
             DownloadError::CsvError(e) => write!(f, "CSV error: {}", e),
             DownloadError::SendError(e) => write!(f, "Send error: {}", e),
+            DownloadError::ZeroLengthError => write!(f, "The content length is zero"),
             DownloadError::ChannelError => write!(f, "Channel error"),
         }
     }
@@ -81,6 +83,7 @@ where
             DownloadError::ReqwestError(e) => write!(f, "Reqwest error: {}", e),
             DownloadError::CsvError(e) => write!(f, "CSV error: {}", e),
             DownloadError::SendError(e) => write!(f, "Send error: {}", e),
+            DownloadError::ZeroLengthError => write!(f, "The content length is zero"),
             DownloadError::ChannelError => write!(f, "Channel error"),
         }
     }
@@ -125,7 +128,7 @@ where
         let response: Response = http_client.get(url).send().await?.error_for_status()?;
 
         // Get the content length
-        self.content_length = response.content_length().unwrap_or(0);
+        self.content_length = response.content_length().ok_or(DownloadError::ZeroLengthError)?;
 
         // Clone the tx_channel, or return an error
         let tx_channel = self.tx_channel.clone().ok_or(DownloadError::ChannelError)?;
