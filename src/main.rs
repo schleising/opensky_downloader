@@ -11,7 +11,7 @@ use clap::Parser;
 
 use colored::Colorize;
 
-use indicatif::{style, ProgressBar};
+use indicatif::{ProgressBar, style};
 
 use db_writer::DatabaseWriter;
 use models::Aircraft;
@@ -69,8 +69,14 @@ async fn main() {
     // Set the URL based on the test flag
     // Format the url based on the current year, month and the test flag
     let url = match cli.test {
-        true => format!("https://www.schleising.net/aircraft-database-complete-{:04}-{:02}.csv", current_year, current_month),
-        false => format!("https://opensky-network.org/datasets/metadata/aircraft-database-complete-{:04}-{:02}.csv", current_year, current_month),        
+        true => format!(
+            "https://www.schleising.net/aircraft-database-complete-{:04}-{:02}.csv",
+            current_year, current_month
+        ),
+        false => format!(
+            "https://opensky-network.org/datasets/metadata/aircraft-database-complete-{:04}-{:02}.csv",
+            current_year, current_month
+        ),
     };
 
     // Set the MongoDB hostname
